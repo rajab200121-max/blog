@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jurnal Foto</title>
+<style>
+  :root {
+    --cream: #faf6f0;
+    --paper: #fffdfa;
+    --ink: #2b2622;
+    --ink-soft: #6b6258;
+    --rust: #b4583c;
+    --moss: #5d6b4f;
+    --line: #e6ddd1;
+    --shadow: rgba(43, 38, 34, 0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 100px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  header h1 {
+    font-size: 2.4rem;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    margin: 0;
+    font-style: italic;
+  }
+
+  header p {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+    margin: 8px 0 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: var(--rust);
+    margin: 18px auto 0;
+    opacity: 0.6;
+  }
+
+  .owner-row {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .pill-btn {
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.72rem;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .pill-btn:hover { border-color: var(--rust); color: var(--rust); }
+
+  /* Upload card — hidden until owner logs in */
+  .upload-card {
+    display: none;
+    background: var(--paper);
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 48px;
+    box-shadow: 0 2px 14px var(--shadow);
+  }
+  .upload-card.visible { display: block; }
+  .upload-card.dragover { border-color: var(--rust); background: #fff8f3; }
+
+  .upload-prompt { text-align: center; cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .upload-prompt .icon { font-size: 2rem; display: block; margin-bottom: 8px; opacity: 0.5; }
+  .upload-prompt .label { color: var(--ink-soft); font-size: 0.92rem; }
+  .upload-prompt .label b { color: var(--rust); }
+  #fileInput { display: none; }
+
+  .pending { display: none; }
+  .pending.active { display: block; }
+  .pending img { display: block; max-width: 100%; max-height: 360px; margin: 0 auto 16px; border-radius: 8px; object-fit: contain; }
+
+  textarea.caption-input {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--cream);
+    padding: 12px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.95rem;
+    color: var(--ink);
+    resize: vertical;
+    min-height: 56px;
+    margin-bottom: 12px;
+  }
+  textarea.caption-input:focus { outline: none; border-color: var(--rust); }
+
+  .pending-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+  button {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.88rem;
+    border: none;
+    border-radius: 7px;
+    padding: 9px 18px;
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-primary { background: var(--rust); color: white; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: var(--ink-soft); }
+  .btn-ghost:hover { color: var(--ink); }
+  .btn-primary[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .upload-progress {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    text-align: right;
+    margin-top: 8px;
+    display: none;
+  }
+  .upload-progress.active { display: block; }
+
+  #feed { display: flex; flex-direction: column; gap: 36px; }
+
+  .entry { background: var(--paper); border-radius: 14px; overflow: hidden; box-shadow: 0 3px 18px var(--shadow); }
+  .entry img { width: 100%; display: block; max-height: 560px; object-fit: cover; background: var(--line); }
+  .entry-body { padding: 20px 24px 18px; }
+  .entry-date {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.72rem; letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--ink-soft); margin-bottom: 6px;
+  }
+  .entry-caption { font-size: 1.12rem; line-height: 1.5; margin: 0 0 14px; }
+  .entry-meta {
+    display: flex; align-items: center; gap: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.82rem; color: var(--ink-soft);
+    border-top: 1px solid var(--line); padding-top: 12px;
+  }
+  .comment-toggle {
+    background: none; border: none; color: var(--moss); font-weight: 600;
+    cursor: pointer; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.82rem;
+  }
+  .delete-btn { margin-left: auto; background: none; color: var(--line); padding: 0 4px; font-size: 0.95rem; display: none; }
+  .delete-btn.visible { display: inline-block; }
+  .delete-btn:hover { color: var(--rust); }
+
+  .comments { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .comments.open { display: block; }
+  .comment { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.88rem; padding: 8px 0; display: flex; gap: 10px; }
+  .comment-author { font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .comment-text { color: var(--ink-soft); line-height: 1.4; }
+
+  .comment-form { display: flex; gap: 8px; margin-top: 10px; }
+  .comment-form input {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    border: 1px solid var(--line); border-radius: 7px; padding: 8px 12px;
+    font-size: 0.86rem; background: var(--cream);
+  }
+  .comment-form input[name="author"] { flex: 0 0 110px; }
+  .comment-form input[name="text"] { flex: 1; }
+  .comment-form input:focus { outline: none; border-color: var(--moss); }
+
+  .no-comments { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.84rem; color: var(--ink-soft); font-style: italic; margin: 0 0 8px; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--ink-soft); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .empty-state .icon { font-size: 2.4rem; opacity: 0.4; margin-bottom: 10px; display: block; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--cream); padding: 10px 20px; border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.85rem;
+    opacity: 0; transition: all 0.25s ease; pointer-events: none; z-index: 50;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(43,38,34,0.45);
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--paper); border-radius: 14px; padding: 26px 24px; max-width: 320px; width: 100%;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.25); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .modal-box h3 { margin: 0 0 6px; font-size: 1.05rem; font-family: 'Iowan Old Style', Georgia, serif; }
+  .modal-box p { margin: 0 0 14px; font-size: 0.85rem; color: var(--ink-soft); }
+  .modal-box input {
+    width: 100%; border: 1px solid var(--line); border-radius: 7px; padding: 9px 12px;
+    font-size: 0.9rem; background: var(--cream); margin-bottom: 12px;
+  }
+  .modal-box input:focus { outline: none; border-color: var(--rust); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-error { color: var(--rust); font-size: 0.8rem; margin: -6px 0 10px; display: none; }
+  .modal-error.show { display: block; }
+
+  @media (max-width: 480px) {
+    .wrap { padding: 32px 14px 90px; }
+    header h1 { font-size: 1.9rem; }
+    .comment-form { flex-direction: column; }
+    .comment-form input[name="author"] { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Jurnal Foto</h1>
+    <p>kumpulan momen, satu foto satu cerita</p>
+    <div class="divider"></div>
+    <div class="owner-row">
+      <button class="pill-btn" id="loginBtn">🔑 masuk sebagai pemilik</button>
+      <button class="pill-btn" id="logoutBtn" style="display:none;">🚪 keluar</button>
+    </div>
+  </header>
+
+  <div class="upload-card" id="uploadCard">
+    <div class="upload-prompt" id="uploadPrompt">
+      <span class="icon">📷</span>
+      <div class="label"><b>Pilih foto</b> atau seret ke sini</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div class="pending" id="pendingArea">
+      <img id="pendingImg" src="" alt="pratinjau">
+      <textarea class="caption-input" id="captionInput" placeholder="Tulis caption untuk foto ini..."></textarea>
+      <div class="pending-actions">
+        <button class="btn-ghost" id="cancelBtn">Batal</button>
+        <button class="btn-primary" id="postBtn">Unggah</button>
+      </div>
+      <div class="upload-progress" id="uploadProgress">Mengunggah...</div>
+    </div>
+  </div>
+
+  <div id="feed"></div>
+  <div class="empty-state" id="emptyState" style="display:none">
+    <span class="icon">🖼️</span>
+    Belum ada foto.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box">
+    <h3>Masuk sebagai pemilik</h3>
+    <p>Masuk dengan email & password Firebase kamu untuk bisa mengunggah dan menghapus foto.</p>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="off">
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="off">
+    <p class="modal-error" id="loginError">Email atau password salah.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="loginCancelBtn">Batal</button>
+      <button class="btn-primary" id="loginConfirmBtn">Masuk</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box">
+    <h3>Hapus foto ini?</h3>
+    <p>Tindakan ini tidak bisa dibatalkan.</p>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="deleteCancelBtn">Batal</button>
+      <button class="btn-primary" id="deleteConfirmBtn">Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDKs -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  getFirestore, collection, addDoc, deleteDoc, doc,
+  onSnapshot, query, orderBy, serverTimestamp, updateDoc, arrayUnion
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref, uploadBytes, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+// ============================================================
+// 🔧 Konfigurasi Firebase project "test123-898aa"
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBxPKC4GWRFJK5YSJnZIU70nIsTC5o2Qzs",
+  authDomain: "test123-898aa.firebaseapp.com",
+  projectId: "test123-898aa",
+  storageBucket: "test123-898aa.firebasestorage.app",
+  messagingSenderId: "402153614416",
+  appId: "1:402153614416:web:fa306be3c75c035a533555"
+};
+// ============================================================
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+let isOwner = false;
+let pendingFile = null;
+let entries = [];
+let deleteTargetId = null;
+
+const uploadCard = document.getElementById('uploadCard');
+const uploadPrompt = document.getElementById('uploadPrompt');
+const fileInput = document.getElementById('fileInput');
+const pendingArea = document.getElementById('pendingArea');
+const pendingImg = document.getElementById('pendingImg');
+const captionInput = document.getElementById('captionInput');
+const uploadProgress = document.getElementById('uploadProgress');
+const feed = document.getElementById('feed');
+const emptyState = document.getElementById('emptyState');
+const toast = document.getElementById('toast');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const loginModal = document.getElementById('loginModal');
+const loginEmail = document.getElementById('loginEmail');
+const loginPassword = document.getElementById('loginPassword');
+const loginError = document.getElementById('loginError');
+const deleteModal = document.getElementById('deleteModal');
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+function formatDate(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------- Auth ----------
+loginBtn.addEventListener('click', () => {
+  loginEmail.value = '';
+  loginPassword.value = '';
+  loginError.classList.remove('show');
+  loginModal.classList.add('open');
+});
+
+document.getElementById('loginCancelBtn').addEventListener('click', () => {
+  loginModal.classList.remove('open');
+});
+
+document.getElementById('loginConfirmBtn').addEventListener('click', async () => {
+  try {
+    await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
+    loginModal.classList.remove('open');
+    showToast('Berhasil masuk sebagai pemilik');
+  } catch (e) {
+    loginError.textContent = 'Gagal masuk: ' + e.message;
+    loginError.classList.add('show');
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  await signOut(auth);
+  showToast('Keluar dari mode pemilik');
+});
+
+onAuthStateChanged(auth, (user) => {
+  isOwner = !!user;
+  loginBtn.style.display = isOwner ? 'none' : 'inline-block';
+  logoutBtn.style.display = isOwner ? 'inline-block' : 'none';
+  uploadCard.classList.toggle('visible', isOwner);
+  render();
+});
+
+// ---------- Upload flow ----------
+uploadPrompt.addEventListener('click', () => fileInput.click());
+
+uploadCard.addEventListener('dragover', (e) => { e.preventDefault(); uploadCard.classList.add('dragover'); });
+uploadCard.addEventListener('dragleave', () => uploadCard.classList.remove('dragover'));
+uploadCard.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadCard.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) { showToast('Mohon pilih file gambar'); return; }
+  pendingFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pendingImg.src = e.target.result;
+    uploadPrompt.style.display = 'none';
+    pendingArea.classList.add('active');
+  };
+  reader.readAsDataURL(file);
+}
+
+document.getElementById('cancelBtn').addEventListener('click', resetUpload);
+
+function resetUpload() {
+  pendingFile = null;
+  fileInput.value = '';
+  captionInput.value = '';
+  pendingArea.classList.remove('active');
+  uploadPrompt.style.display = 'block';
+  uploadProgress.classList.remove('active');
+}
+
+document.getElementById('postBtn').addEventListener('click', async () => {
+  if (!pendingFile || !isOwner) return;
+  const postBtn = document.getElementById('postBtn');
+  postBtn.disabled = true;
+  uploadProgress.classList.add('active');
+  uploadProgress.textContent = 'Mengunggah foto...';
+
+  try {
+    const filename = Date.now() + '_' + pendingFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+    const storageRef = ref(storage, 'photos/' + filename);
+    await uploadBytes(storageRef, pendingFile);
+    const url = await getDownloadURL(storageRef);
+
+    uploadProgress.textContent = 'Menyimpan data...';
+    await addDoc(collection(db, 'entries'), {
+      image: url,
+      storagePath: 'photos/' + filename,
+      caption: captionInput.value.trim() || '(tanpa caption)',
+      createdAt: serverTimestamp(),
+      comments: []
+    });
+
+    resetUpload();
+    showToast('Foto diunggah ✓');
+  } catch (e) {
+    showToast('Gagal mengunggah: ' + e.message);
+  } finally {
+    postBtn.disabled = false;
+  }
+});
+
+// ---------- Realtime feed ----------
+const q = query(collection(db, 'entries'), orderBy('createdAt', 'desc'));
+onSnapshot(q, (snapshot) => {
+  entries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  render();
+}, (err) => {
+  showToast('Gagal memuat data: ' + err.message);
+});
+
+function render() {
+  if (entries.length === 0) {
+    feed.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  feed.innerHTML = entries.map(entry => {
+    const comments = entry.comments || [];
+    const commentsHtml = comments.length
+      ? comments.map(c => `
+          <div class="comment">
+            <span class="comment-author">${escapeHtml(c.author)}</span>
+            <span class="comment-text">${escapeHtml(c.text)}</span>
+          </div>
+        `).join('')
+      : '<p class="no-comments">Belum ada komentar. Jadilah yang pertama.</p>';
+
+    return `
+      <div class="entry" data-id="${entry.id}">
+        <img src="${entry.image}" alt="foto" loading="lazy">
+        <div class="entry-body">
+          <div class="entry-date">${formatDate(entry.createdAt)}</div>
+          <p class="entry-caption">${escapeHtml(entry.caption)}</p>
+          <div class="entry-meta">
+            <button class="comment-toggle" data-action="toggle-comments">
+              ${comments.length > 0 ? comments.length + ' komentar' : 'Tulis komentar'}
+            </button>
+            <button class="delete-btn ${isOwner ? 'visible' : ''}" data-action="delete" title="Hapus foto">✕</button>
+          </div>
+          <div class="comments" data-comments>
+            ${commentsHtml}
+            <form class="comment-form" data-action="comment-form">
+              <input type="text" name="author" placeholder="Nama" maxlength="30" required>
+              <input type="text" name="text" placeholder="Tulis komentar..." maxlength="240" required>
+              <button type="submit" class="btn-primary" style="flex:0 0 auto;">Kirim</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ---------- Comments & delete (delegated) ----------
+feed.addEventListener('click', (e) => {
+  const entryEl = e.target.closest('.entry');
+  if (!entryEl) return;
+  const id = entryEl.dataset.id;
+
+  if (e.target.dataset.action === 'toggle-comments') {
+    entryEl.querySelector('[data-comments]').classList.toggle('open');
+  }
+
+  if (e.target.dataset.action === 'delete' && isOwner) {
+    deleteTargetId = id;
+    deleteModal.classList.add('open');
+  }
+});
+
+document.getElementById('deleteCancelBtn').addEventListener('click', () => {
+  deleteModal.classList.remove('open');
+  deleteTargetId = null;
+});
+
+document.getElementById('deleteConfirmBtn').addEventListener('click', async () => {
+  if (!deleteTargetId || !isOwner) return;
+  const entry = entries.find(e => e.id === deleteTargetId);
+  try {
+    if (entry && entry.storagePath) {
+      try { await deleteObject(ref(storage, entry.storagePath)); } catch (e) { /* file mungkin sudah tidak ada */ }
+    }
+    await deleteDoc(doc(db, 'entries', deleteTargetId));
+    showToast('Foto dihapus');
+  } catch (e) {
+    showToast('Gagal menghapus: ' + e.message);
+  }
+  deleteModal.classList.remove('open');
+  deleteTargetId = null;
+});
+
+feed.addEventListener('submit', async (e) => {
+  if (e.target.dataset.action !== 'comment-form') return;
+  e.preventDefault();
+  const form = e.target;
+  const entryEl = form.closest('.entry');
+  const id = entryEl.dataset.id;
+  const author = form.author.value.trim();
+  const text = form.text.value.trim();
+  if (!author || !text) return;
+
+  try {
+    await updateDoc(doc(db, 'entries', id), {
+      comments: arrayUnion({ author, text, at: new Date().toISOString() })
+    });
+    form.reset();
+    showToast('Komentar ditambahkan');
+  } catch (err) {
+    showToast('Gagal mengirim komentar: ' + err.message);
+  }
+});
+</script>
+
+</body>
+</html>
