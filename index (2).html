@@ -410,6 +410,14 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ============================================================
+// 🔧 Konfigurasi Cloudinary (penyimpanan file foto)
+// ============================================================
+const CLOUDINARY_CLOUD_NAME = "dekpcdksq";
+const CLOUDINARY_UPLOAD_PRESET = "jurnal foto";
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+// ============================================================
+
 let isOwner = false;
 let pendingFile = null;
 let entries = [];
@@ -509,48 +517,33 @@ fileInput.addEventListener('change', (e) => {
 
 function handleFile(file) {
   if (!file.type.startsWith('image/')) { showToast('Mohon pilih file gambar'); return; }
-  compressImage(file, 1000, 700000, (fullDataUrl) => {
-    compressImage(file, 360, 80000, (thumbDataUrl) => {
-      pendingFile = { full: fullDataUrl, thumb: thumbDataUrl };
-      pendingImg.src = fullDataUrl;
-      uploadPrompt.style.display = 'none';
-      pendingArea.classList.add('active');
-    });
-  });
-}
-
-// Resizes + compresses an image client-side to a target byte budget.
-// maxDim = longest side in px, byteBudget = approx max size of the resulting data URL.
-function compressImage(file, maxDim, byteBudget, callback) {
+  pendingFile = file; // keep the original File object; Cloudinary handles optimization
   const reader = new FileReader();
   reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > height && width > maxDim) {
-        height = Math.round(height * (maxDim / width));
-        width = maxDim;
-      } else if (height > maxDim) {
-        width = Math.round(width * (maxDim / height));
-        height = maxDim;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      let quality = 0.8;
-      let dataUrl = canvas.toDataURL('image/jpeg', quality);
-      while (dataUrl.length > byteBudget && quality > 0.15) {
-        quality -= 0.1;
-        dataUrl = canvas.toDataURL('image/jpeg', quality);
-      }
-      callback(dataUrl);
-    };
-    img.src = e.target.result;
+    pendingImg.src = e.target.result;
+    uploadPrompt.style.display = 'none';
+    pendingArea.classList.add('active');
   };
   reader.readAsDataURL(file);
+}
+
+// Uploads a file to Cloudinary (unsigned) and returns {fullUrl, thumbUrl}.
+async function uploadToCloudinary(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+  const res = await fetch(CLOUDINARY_UPLOAD_URL, { method: 'POST', body: formData });
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error('Cloudinary upload gagal: ' + errBody);
+  }
+  const data = await res.json();
+  // data.secure_url is the full-size image. Build a thumbnail URL using
+  // Cloudinary's on-the-fly transformation (no extra upload needed).
+  const fullUrl = data.secure_url;
+  const thumbUrl = fullUrl.replace('/upload/', '/upload/c_fill,w_400,h_400,q_auto,f_auto/');
+  return { fullUrl, thumbUrl };
 }
 
 document.getElementById('cancelBtn').addEventListener('click', resetUpload);
@@ -569,20 +562,15 @@ document.getElementById('postBtn').addEventListener('click', async () => {
   const postBtn = document.getElementById('postBtn');
   postBtn.disabled = true;
   uploadProgress.classList.add('active');
-  uploadProgress.textContent = 'Menyimpan foto...';
+  uploadProgress.textContent = 'Mengunggah ke Cloudinary...';
 
   try {
-    const { full, thumb } = pendingFile;
-    if (full.length > 900000 || thumb.length > 150000) {
-      showToast('Foto masih terlalu besar setelah dikompres, coba foto lain.');
-      uploadProgress.classList.remove('active');
-      postBtn.disabled = false;
-      return;
-    }
+    const { fullUrl, thumbUrl } = await uploadToCloudinary(pendingFile);
 
+    uploadProgress.textContent = 'Menyimpan data...';
     await addDoc(collection(db, 'entries'), {
-      image: full,
-      thumb: thumb,
+      image: fullUrl,
+      thumb: thumbUrl,
       caption: captionInput.value.trim() || '(tanpa caption)',
       createdAt: serverTimestamp(),
       comments: []
@@ -606,58 +594,39 @@ onSnapshot(q, (snapshot) => {
   showToast('Gagal memuat data: ' + err.message);
 });
 
-// Builds a small thumbnail from an existing data URL (used for migrating old photos).
-function makeThumbFromDataUrl(dataUrl, maxDim, byteBudget, callback) {
-  const img = new Image();
-  img.onload = () => {
-    let { width, height } = img;
-    if (width > height && width > maxDim) {
-      height = Math.round(height * (maxDim / width));
-      width = maxDim;
-    } else if (height > maxDim) {
-      width = Math.round(width * (maxDim / height));
-      height = maxDim;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-    let quality = 0.8;
-    let out = canvas.toDataURL('image/jpeg', quality);
-    while (out.length > byteBudget && quality > 0.15) {
-      quality -= 0.1;
-      out = canvas.toDataURL('image/jpeg', quality);
-    }
-    callback(out);
-  };
-  img.src = dataUrl;
+// Converts a base64 data URL into a File object so it can be sent to Cloudinary.
+function dataUrlToFile(dataUrl, filename) {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], filename, { type: mime });
 }
 
 migrateBtn.addEventListener('click', async () => {
-  const oldEntries = entries.filter(e => !e.thumb && e.image);
+  // "Old" entries are ones still storing a base64 data URL instead of a Cloudinary link.
+  const oldEntries = entries.filter(e => e.image && e.image.startsWith('data:'));
   if (oldEntries.length === 0) {
-    showToast('Semua foto sudah punya thumbnail, tidak perlu migrasi.');
+    showToast('Semua foto sudah memakai Cloudinary, tidak perlu migrasi.');
     return;
   }
   migrateBtn.disabled = true;
   let done = 0;
   for (const entry of oldEntries) {
     try {
-      await new Promise((resolve) => {
-        makeThumbFromDataUrl(entry.image, 360, 80000, async (thumb) => {
-          try {
-            await updateDoc(doc(db, 'entries', entry.id), { thumb });
-          } catch (e) { /* skip this one, continue with others */ }
-          done++;
-          migrateBtn.textContent = `🪄 memproses... (${done}/${oldEntries.length})`;
-          resolve();
-        });
-      });
-    } catch (e) { /* continue */ }
+      const file = dataUrlToFile(entry.image, `migrated_${entry.id}.jpg`);
+      const { fullUrl, thumbUrl } = await uploadToCloudinary(file);
+      await updateDoc(doc(db, 'entries', entry.id), { image: fullUrl, thumb: thumbUrl });
+      done++;
+      migrateBtn.textContent = `🪄 memproses... (${done}/${oldEntries.length})`;
+    } catch (e) {
+      console.error('Migrasi gagal untuk entry', entry.id, e);
+    }
   }
   migrateBtn.textContent = '🪄 percepat foto lama';
   migrateBtn.disabled = false;
-  showToast(`Selesai! ${done} foto lama sekarang punya thumbnail.`);
+  showToast(`Selesai! ${done} foto lama dipindah ke Cloudinary.`);
 });
 
 function render() {
